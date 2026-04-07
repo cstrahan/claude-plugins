@@ -230,8 +230,9 @@ Be aware that later commits depending on the dropped commit's changes will confl
 
 Use the `edit` action to pause the rebase at a commit, then reset and recommit in pieces. This is a multi-step process — the rebase pauses and you must run additional commands before continuing.
 
+**Step 1: Set up the rebase to pause at the commit:**
+
 ```bash
-# Step 1: Set up the rebase to pause at the commit to split
 EDITOR_SCRIPT=$(mktemp)
 cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
@@ -247,15 +248,22 @@ rm -f "$EDITOR_SCRIPT"
 # The rebase is now paused at abc1234
 ```
 
+**Step 2: Reset to unstage the commit's changes:**
+
 ```bash
-# Step 2: Mixed reset to unstage the commit's changes
-# (Use `git reset HEAD~1` — NOT `--soft`, which keeps files staged
-# and would require individually unstaging each file before selective commits)
+# Use mixed reset (the default) — NOT --soft
+# Mixed reset unstages everything, making it easy to selectively re-add
+# --soft keeps files staged, requiring you to unstage before selective commits
 git reset HEAD~1
 ```
 
+**Step 3: Stage and commit in pieces** — choose the approach that fits:
+
+##### Approach A: Changes are in separate files
+
+The simplest case. Just `git add` each file and commit separately:
+
 ```bash
-# Step 3: Stage and commit in pieces
 git add src/models/user.rb
 git commit -m "feat: add user model"
 
@@ -263,8 +271,78 @@ git add src/controllers/users_controller.rb
 git commit -m "feat: add users controller"
 ```
 
+##### Approach B: Changes are in the same file, in separable hunks
+
+When the same file has multiple non-overlapping changes (e.g., a new function added at the bottom AND a modification to an existing function at the top), use `git apply --cached` with a partial patch to stage specific hunks:
+
 ```bash
-# Step 4: Continue the rebase
+# Save the full working state
+cp path/to/file.py /tmp/file_full.py
+
+# Create a patch for just the hunk you want in the first commit
+cat >| /tmp/first_change.patch << 'PATCH'
+diff --git a/path/to/file.py b/path/to/file.py
+--- a/path/to/file.py
++++ b/path/to/file.py
+@@ -1,4 +1,4 @@
+-def greet(name):
+-    return f"Hello, {name}"
++def greet(name, greeting="Hello"):
++    return f"{greeting}, {name}"
+ 
+ 
+PATCH
+
+# Stage just that hunk (--cached applies to index only, leaving working tree intact)
+git apply --cached /tmp/first_change.patch
+git commit -m "feat: add optional greeting parameter"
+
+# Stage and commit the remaining changes
+git add path/to/file.py
+git commit -m "feat: add multiply function"
+```
+
+The patch must be a valid unified diff with correct context lines. If crafting patches feels error-prone, use Approach C instead.
+
+##### Approach C: Write the intermediate file state directly (most reliable)
+
+When changes are interleaved in the same lines — or when the intermediate state needs to be different from either the before or after state to remain valid — write the intermediate file content directly. This is the most reliable approach because you have full control over each state.
+
+This is necessary when:
+- Splitting a rename + addition (the intermediate state has the rename done but not the addition — a state that never existed in the original history)
+- Splitting a new function + calls to it (the intermediate state adds the function but doesn't wire it up yet)
+- Any case where partial application would leave the code syntactically or semantically broken
+
+```bash
+# Save the full desired end state
+cp path/to/file.py /tmp/file_full.py
+
+# Write the intermediate state — this may be a version of the file
+# that never existed in the original commit history
+cat >| path/to/file.py << 'EOF'
+class Config:
+    def __init__(self):
+        self.debug = False
+        self.fmt = "text"          # renamed from output_format
+
+    def summary(self):
+        return f"debug={self.debug}, fmt={self.fmt}"  # updated reference
+EOF
+
+git add path/to/file.py
+git commit -m "refactor: rename output_format to fmt"
+
+# Restore the full end state for the second commit
+cp /tmp/file_full.py path/to/file.py
+git add path/to/file.py
+git commit -m "feat: add max_retries to Config"
+```
+
+The intermediate state must be valid on its own — it should compile/parse and ideally pass tests. Think of it as: "if someone checked out this commit, would the code work?"
+
+**Step 4: Continue the rebase:**
+
+```bash
 git rebase --continue
 ```
 
