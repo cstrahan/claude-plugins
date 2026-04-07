@@ -399,6 +399,91 @@ rm -f "$MSG_EDITOR" "$COUNTER_FILE"
 
 The split-heredoc pattern keeps the counter mechanics (which need `$COUNTER_FILE` expanded) in an unquoted heredoc, and the message logic (which uses `$1`, `$COUNT`, etc. literally) in a quoted heredoc. This avoids the error-prone escaping of every `$` in a single unquoted heredoc. Note the use of `>|` (first write) then `>>` (append) to build the script in two parts.
 
+### Retroactively applying a formatter across commits
+
+A common scenario: you've made several commits but forgot to run the project's formatter. You want each commit in the history to have properly formatted code, not just a single formatting commit tacked on at the end.
+
+The challenge is that formatting an early commit changes its content, causing conflicts with every subsequent commit that touches the same files. This is unavoidable — the subsequent commits were authored against the unformatted code.
+
+#### The approach: edit-amend with conflict resolution
+
+Use `edit` on each commit, run the formatter, amend, and continue. When conflicts occur (and they will), resolve them by taking the incoming commit's content (`--theirs`) and re-running the formatter. This works because:
+
+- `--theirs` gives you the original commit's intended content (the new code it added/changed)
+- Re-running the formatter ensures that content is properly formatted
+- The resolution is always correct because formatting is purely cosmetic — the logic in `--theirs` is right, you're just fixing the style
+
+**Step 1: Set up edit stops on all commits to format:**
+
+```bash
+EDITOR_SCRIPT=$(mktemp)
+cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
+#!/bin/bash
+cat > "$1" << 'TODO'
+edit abc1234 first commit to format
+edit def5678 second commit to format
+edit ghi9012 third commit to format
+TODO
+SCRIPT
+chmod +x "$EDITOR_SCRIPT"
+
+GIT_SEQUENCE_EDITOR="$EDITOR_SCRIPT" git rebase -i '<base>^'
+rm -f "$EDITOR_SCRIPT"
+```
+
+**Step 2: At each edit stop, format and amend:**
+
+```bash
+# Run the project's formatter (replace with your actual formatter command)
+npx prettier --write 'src/**/*.{ts,tsx}'   # or: black ., gofmt -w ., etc.
+
+# Stage and amend if the formatter changed anything
+git add -A
+git commit --amend --no-edit
+git rebase --continue
+```
+
+**Step 3: When a conflict occurs, resolve by accepting theirs + reformatting:**
+
+```bash
+# For each conflicted file: take the original commit's version, then reformat
+git checkout --theirs <conflicted-file>
+npx prettier --write <conflicted-file>     # re-run formatter on resolved file
+git add <conflicted-file>
+git rebase --continue
+```
+
+Repeat step 3 for each subsequent conflict. With formatting changes, conflicts are predictable — they'll occur on files that the current commit modifies if you formatted those same files in a previous commit.
+
+#### Why `--theirs` is safe here
+
+During a rebase, `--theirs` refers to the commit being replayed (the original commit's changes). `--ours` refers to the rebased history so far (which now has formatted code). Since the only difference between ours and theirs is formatting (not logic), taking theirs gives you the correct logic, and re-running the formatter gives you the correct style. This wouldn't be safe for non-cosmetic conflicts.
+
+#### Alternative: `--exec` for automation
+
+Instead of manual `edit` stops, use `--exec` to run the formatter after each commit automatically. You still need to handle conflicts manually when they occur:
+
+```bash
+EDITOR_SCRIPT=$(mktemp)
+cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
+#!/bin/bash
+cat > "$1" << 'TODO'
+pick abc1234 first commit
+exec npx prettier --write 'src/**/*.{ts,tsx}' && git add -A && git commit --amend --no-edit
+pick def5678 second commit
+exec npx prettier --write 'src/**/*.{ts,tsx}' && git add -A && git commit --amend --no-edit
+TODO
+SCRIPT
+chmod +x "$EDITOR_SCRIPT"
+
+GIT_SEQUENCE_EDITOR="$EDITOR_SCRIPT" git rebase -i '<base>^'
+rm -f "$EDITOR_SCRIPT"
+```
+
+The `exec` line runs after each `pick`. When a conflict interrupts the rebase, resolve with `--theirs` + reformat as above, then `git rebase --continue`. The exec for that commit won't re-run (it already conflicted before reaching exec), but the formatter ran during your resolution, so the commit is formatted.
+
+**Note**: The formatter command in `exec` must be available at an absolute path or installed globally — it may not exist in the working tree at earlier commits.
+
 ### Handling conflicts
 
 When a rebase encounters conflicts:
