@@ -355,18 +355,26 @@ COUNTER_FILE=$(mktemp)
 echo "0" >| "$COUNTER_FILE"
 
 MSG_EDITOR=$(mktemp)
+
+# Unquoted heredoc: $COUNTER_FILE is expanded to the actual temp path.
+# Lines that reference the counter file must be in this section.
 cat >| "$MSG_EDITOR" << MSGEDIT
 #!/bin/bash
 COUNT=\$(cat "$COUNTER_FILE")
 COUNT=\$((COUNT + 1))
 echo "\$COUNT" >| "$COUNTER_FILE"
+MSGEDIT
 
-if [ "\$COUNT" -eq 1 ]; then
-  cat > "\$1" << 'MSG1'
+# Quoted heredoc: no expansion, no escaping needed.
+# The message logic goes here for readability.
+cat >> "$MSG_EDITOR" << 'MSGEDIT'
+
+if [ "$COUNT" -eq 1 ]; then
+  cat > "$1" << 'MSG1'
 feat: first reworded message
 MSG1
-elif [ "\$COUNT" -eq 2 ]; then
-  cat > "\$1" << 'MSG2'
+elif [ "$COUNT" -eq 2 ]; then
+  cat > "$1" << 'MSG2'
 fix: second reworded message
 MSG2
 fi
@@ -377,7 +385,7 @@ GIT_EDITOR="$MSG_EDITOR" GIT_SEQUENCE_EDITOR="$EDITOR_SCRIPT" git rebase -i '<ba
 rm -f "$MSG_EDITOR" "$COUNTER_FILE"
 ```
 
-Note: The counter file path must be an absolute path embedded in the script (the `$COUNTER_FILE` variable is expanded when the heredoc is written since it uses `MSGEDIT` without quotes, not `'MSGEDIT'`). This is important because the script runs in a separate bash process.
+The split-heredoc pattern keeps the counter mechanics (which need `$COUNTER_FILE` expanded) in an unquoted heredoc, and the message logic (which uses `$1`, `$COUNT`, etc. literally) in a quoted heredoc. This avoids the error-prone escaping of every `$` in a single unquoted heredoc. Note the use of `>|` (first write) then `>>` (append) to build the script in two parts.
 
 ### Handling conflicts
 
