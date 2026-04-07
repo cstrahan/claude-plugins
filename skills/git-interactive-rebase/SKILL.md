@@ -86,8 +86,11 @@ Available actions:
 | `squash` | `s`   | Meld into previous commit, combine messages      |
 | `fixup`  | `f`   | Meld into previous commit, discard this message  |
 | `drop`   | `d`   | Remove commit entirely                           |
+| `exec`   | `x`   | Run a shell command (not tied to a commit)        |
 
 Omitting a line is equivalent to `drop` — the commit will be removed.
+
+The `exec` action is special — it doesn't take a commit hash, just a shell command. It runs at that point in the rebase sequence. If the command fails (non-zero exit), the rebase pauses so you can investigate. See "Using exec in the todo list" below for details.
 
 #### 4. Build and execute
 
@@ -225,6 +228,49 @@ pick ghi9012 Keep this too
 ```
 
 Be aware that later commits depending on the dropped commit's changes will conflict.
+
+#### Using `exec` in the todo list
+
+The `exec` (or `x`) action runs a shell command at a specific point in the rebase sequence. Unlike `--exec` (the command-line flag, which inserts a command after *every* pick), `exec` lines in the todo give you precise control over where commands run.
+
+The syntax differs from other actions — no commit hash, just the command:
+
+```text
+pick abc1234 feat: add user model
+pick def5678 feat: add user controller
+exec python -m pytest tests/user/
+pick ghi9012 feat: add user routes
+exec python -m pytest tests/
+```
+
+If the command fails (non-zero exit), the rebase pauses so you can investigate. Fix the issue, then `git rebase --continue`.
+
+**When `exec` is useful:**
+
+- **Running tests at specific points** to verify each commit in isolation:
+  ```text
+  pick abc1234 feat: add parser
+  exec make test
+  pick def5678 refactor: optimize parser
+  exec make test
+  ```
+
+- **Running a check only after certain commits** (not all of them):
+  ```text
+  pick abc1234 chore: update deps
+  exec npm audit
+  pick def5678 feat: add feature
+  pick ghi9012 docs: update readme
+  ```
+
+- **Inserting a new commit mid-history** by running commands that create one:
+  ```text
+  pick abc1234 feat: add feature
+  exec echo "v1.2.0" > VERSION && git add VERSION && git commit -m "chore: bump version to 1.2.0"
+  pick def5678 next commit
+  ```
+
+**`exec` vs `--exec` flag:** Use the `--exec` flag when you want the same command after every commit (e.g., retroactive formatting). Use `exec` lines in the todo when you want commands at specific points, or different commands at different points.
 
 #### Split a commit into multiple commits
 
