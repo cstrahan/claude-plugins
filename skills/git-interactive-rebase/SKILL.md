@@ -459,30 +459,26 @@ Repeat step 3 for each subsequent conflict. With formatting changes, conflicts a
 
 During a rebase, `--theirs` refers to the commit being replayed (the original commit's changes). `--ours` refers to the rebased history so far (which now has formatted code). Since the only difference between ours and theirs is formatting (not logic), taking theirs gives you the correct logic, and re-running the formatter gives you the correct style. This wouldn't be safe for non-cosmetic conflicts.
 
-#### Alternative: `--exec` for automation
+#### Alternative: `--exec` for automation (recommended)
 
-Instead of manual `edit` stops, use `--exec` to run the formatter after each commit automatically. You still need to handle conflicts manually when they occur:
+Instead of manual `edit` stops, use the `--exec` flag to run the formatter after each commit automatically. The `--exec` flag inserts the command after every `pick` in the todo — no `GIT_SEQUENCE_EDITOR` script needed:
 
 ```bash
-EDITOR_SCRIPT=$(mktemp)
-cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
-#!/bin/bash
-cat > "$1" << 'TODO'
-pick abc1234 first commit
-exec npx prettier --write 'src/**/*.{ts,tsx}' && git add -A && git commit --amend --no-edit
-pick def5678 second commit
-exec npx prettier --write 'src/**/*.{ts,tsx}' && git add -A && git commit --amend --no-edit
-TODO
-SCRIPT
-chmod +x "$EDITOR_SCRIPT"
-
-GIT_SEQUENCE_EDITOR="$EDITOR_SCRIPT" git rebase -i '<base>^'
-rm -f "$EDITOR_SCRIPT"
+git rebase '<base>^' --exec 'npx prettier --write "src/**/*.{ts,tsx}" && git add -A && git commit --amend --no-edit'
 ```
 
-The `exec` line runs after each `pick`. When a conflict interrupts the rebase, resolve with `--theirs` + reformat as above, then `git rebase --continue`. The exec for that commit won't re-run (it already conflicted before reaching exec), but the formatter ran during your resolution, so the commit is formatted.
+When a conflict occurs, resolve it by just taking `--theirs` — you don't even need to re-run the formatter manually, because the exec command fires after `git rebase --continue` and will format+amend the commit for you:
 
-**Note**: The formatter command in `exec` must be available at an absolute path or installed globally — it may not exist in the working tree at earlier commits.
+```bash
+git checkout --theirs <conflicted-file>
+git add <conflicted-file>
+git rebase --continue
+# exec fires automatically: formats, stages, and amends the commit
+```
+
+Repeat for each conflict. The pattern is always the same: `--theirs`, `add`, `continue`.
+
+**Note**: The formatter command must be available at an absolute path or installed globally — it may not exist in the working tree at earlier commits. Formatting is idempotent, so the amend is safe even if the formatter makes no changes.
 
 ### Handling conflicts
 
