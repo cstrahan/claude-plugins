@@ -15,7 +15,7 @@ Claude Code skills for general-purpose git workflows and other development tasks
 Load the skills for a single session without installing:
 
 ```bash
-claude --plugin-dir /path/to/claude-plugins
+claude --plugin-dir /path/to/cstrahan-claude-plugins
 ```
 
 After making changes to a skill, reload without restarting:
@@ -37,15 +37,15 @@ From within Claude Code:
 Or from a local clone:
 
 ```
-/plugin marketplace add /path/to/claude-plugins
+/plugin marketplace add /path/to/cstrahan-claude-plugins
 ```
 
 #### 2. Install the plugin
 
-From within Claude Code, run `/plugin` and select `claude-plugins` to install. Or install directly:
+From within Claude Code, run `/plugin` and select `cstrahan-claude-plugins` to install. Or install directly:
 
 ```
-/plugin install claude-plugins@claude-plugins
+/plugin install cstrahan-claude-plugins@cstrahan-claude-plugins
 ```
 
 #### 3. Reload
@@ -63,9 +63,9 @@ Skills can be installed at different scopes:
 - **Local**: Available to you in a specific repo only
 
 ```
-/plugin install claude-plugins@claude-plugins --scope user
-/plugin install claude-plugins@claude-plugins --scope project
-/plugin install claude-plugins@claude-plugins --scope local
+/plugin install cstrahan-claude-plugins@cstrahan-claude-plugins --scope user
+/plugin install cstrahan-claude-plugins@cstrahan-claude-plugins --scope project
+/plugin install cstrahan-claude-plugins@cstrahan-claude-plugins --scope local
 ```
 
 ## Reinstalling
@@ -73,8 +73,8 @@ Skills can be installed at different scopes:
 To pick up changes after updating the repo (e.g., `git pull`):
 
 ```
-/plugin uninstall claude-plugins
-/plugin install claude-plugins@claude-plugins
+/plugin uninstall cstrahan-claude-plugins
+/plugin install cstrahan-claude-plugins@cstrahan-claude-plugins
 /reload-plugins
 ```
 
@@ -89,8 +89,8 @@ Or for a quick session reload without reinstalling:
 To remove the plugin and marketplace:
 
 ```
-/plugin uninstall claude-plugins
-/plugin marketplace remove claude-plugins
+/plugin uninstall cstrahan-claude-plugins
+/plugin marketplace remove cstrahan-claude-plugins
 /reload-plugins
 ```
 
@@ -101,7 +101,7 @@ Once installed, skills activate automatically based on context. Mention interact
 You can also invoke a skill explicitly:
 
 ```
-/claude-plugins:git-interactive-rebase
+/cstrahan-claude-plugins:git-interactive-rebase
 ```
 
 ## Adding new skills
