@@ -15,37 +15,16 @@ Git's interactive rebase (`git rebase -i`) normally opens an editor for the user
 - Complex todo modifications (reordering, inserting lines) are error-prone with sed
 - A temp script approach works identically on macOS and Linux
 
-### Shell compatibility: the noclobber problem
+### Shell compatibility
 
-Many zsh configurations set `noclobber`, which prevents `>` from overwriting existing files. Since `mktemp` creates the file before you write to it, `cat > "$EDITOR_SCRIPT"` will fail silently in zsh with noclobber.
-
-**Solution**: Delete the mktemp file before writing, or use a path that doesn't exist yet:
-
-```bash
-# Option A: delete the mktemp file first
-EDITOR_SCRIPT=$(mktemp)
-rm -f "$EDITOR_SCRIPT"
-cat > "$EDITOR_SCRIPT" << 'SCRIPT'
-...
-SCRIPT
-
-# Option B: use a known-clean path
-EDITOR_SCRIPT="/tmp/git_rebase_editor.sh"
-rm -f "$EDITOR_SCRIPT"
-cat > "$EDITOR_SCRIPT" << 'SCRIPT'
-...
-SCRIPT
-```
-
-This only affects the outer shell (zsh). The inner script uses `#!/bin/bash`, so its `cat > "$1"` works fine since bash doesn't set noclobber by default.
+All examples in this skill use `>|` instead of `>` for file redirection. This is because zsh's `noclobber` option (common in user configs) makes `>` fail on existing files — and `mktemp` creates the file before you write to it. The `>|` operator forces the overwrite and works in both bash and zsh. See the **shell** skill for full details on zsh compatibility.
 
 ### Core pattern
 
 ```bash
 # 1. Create a temp editor script that writes the desired todo
 EDITOR_SCRIPT=$(mktemp)
-rm -f "$EDITOR_SCRIPT"
-cat > "$EDITOR_SCRIPT" << 'SCRIPT'
+cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
 cat > "$1" << 'TODO'
 pick abc1234 First commit message
@@ -114,8 +93,7 @@ Omitting a line is equivalent to `drop` — the commit will be removed.
 
 ```bash
 EDITOR_SCRIPT=$(mktemp)
-rm -f "$EDITOR_SCRIPT"
-cat > "$EDITOR_SCRIPT" << 'SCRIPT'
+cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
 cat > "$1" << 'TODO'
 pick abc1234 First commit
@@ -176,8 +154,7 @@ The `true` command exits successfully without modifying the file, so git uses th
 
 ```bash
 MSG_EDITOR=$(mktemp)
-rm -f "$MSG_EDITOR"
-cat > "$MSG_EDITOR" << 'MSGEDIT'
+cat >| "$MSG_EDITOR" << 'MSGEDIT'
 #!/bin/bash
 cat > "$1" << 'MSG'
 feat: add complete user module
@@ -197,8 +174,7 @@ Use the `reword` action and supply a `GIT_EDITOR` script with the new message:
 
 ```bash
 EDITOR_SCRIPT=$(mktemp)
-rm -f "$EDITOR_SCRIPT"
-cat > "$EDITOR_SCRIPT" << 'SCRIPT'
+cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
 cat > "$1" << 'TODO'
 reword abc1234 old message here
@@ -208,8 +184,7 @@ SCRIPT
 chmod +x "$EDITOR_SCRIPT"
 
 MSG_EDITOR=$(mktemp)
-rm -f "$MSG_EDITOR"
-cat > "$MSG_EDITOR" << 'MSGEDIT'
+cat >| "$MSG_EDITOR" << 'MSGEDIT'
 #!/bin/bash
 cat > "$1" << 'MSG'
 feat: better commit message
@@ -258,8 +233,7 @@ Use the `edit` action to pause the rebase at a commit, then reset and recommit i
 ```bash
 # Step 1: Set up the rebase to pause at the commit to split
 EDITOR_SCRIPT=$(mktemp)
-rm -f "$EDITOR_SCRIPT"
-cat > "$EDITOR_SCRIPT" << 'SCRIPT'
+cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
 cat > "$1" << 'TODO'
 edit abc1234 commit to split
@@ -300,16 +274,14 @@ When you need different messages for multiple reworded commits in a single rebas
 
 ```bash
 COUNTER_FILE=$(mktemp)
-rm -f "$COUNTER_FILE"
-echo "0" > "$COUNTER_FILE"
+echo "0" >| "$COUNTER_FILE"
 
 MSG_EDITOR=$(mktemp)
-rm -f "$MSG_EDITOR"
-cat > "$MSG_EDITOR" << MSGEDIT
+cat >| "$MSG_EDITOR" << MSGEDIT
 #!/bin/bash
 COUNT=\$(cat "$COUNTER_FILE")
 COUNT=\$((COUNT + 1))
-echo "\$COUNT" > "$COUNTER_FILE"
+echo "\$COUNT" >| "$COUNTER_FILE"
 
 if [ "\$COUNT" -eq 1 ]; then
   cat > "\$1" << 'MSG1'
@@ -351,7 +323,7 @@ Conflicts are most likely when:
 The todo file path wasn't passed correctly. Ensure the inner script uses `"$1"`.
 
 **Rebase doesn't seem to do anything / todo silently ignored**
-The editor script may have failed to write the todo file. Common cause: zsh `noclobber` preventing `cat >` from overwriting the mktemp file. See "Shell compatibility" above. Also check that commit hashes match actual commits in the range — use short hashes (7+ chars) from `git log --oneline`.
+The editor script may have failed to write the todo file. Common cause: zsh `noclobber` preventing `cat >` from overwriting the mktemp file — use `>|` instead. See the **shell** skill for details. Also check that commit hashes match actual commits in the range — use short hashes (7+ chars) from `git log --oneline`.
 
 **"zsh: no matches found: abc^"**
 Quote the caret: `'abc1234^'` or escape it: `abc1234\^`
