@@ -173,3 +173,81 @@ git commit -m "fix: handle edge case!"
 git commit -m 'fix: handle edge case!'
 git commit -m "fix: handle edge case\!"
 ```
+
+## Behavioral differences between bash and zsh
+
+Beyond special characters and options, bash and zsh have fundamental behavioral differences that can cause scripts to silently produce wrong results.
+
+### Word splitting
+
+This is the most significant difference between the two shells.
+
+- **Bash**: Unquoted variables are automatically split on whitespace into separate arguments.
+- **Zsh**: Unquoted variables are NOT split — the value stays as a single argument.
+
+```bash
+VAR="hello world"
+
+# Bash: $VAR becomes two arguments → looks for files "hello" and "world"
+ls $VAR    # bash: ls hello world
+
+# Zsh: $VAR stays one argument → looks for file "hello world"
+ls $VAR    # zsh: ls "hello world"
+```
+
+This means scripts that rely on unquoted variables to pass multiple arguments (a common bash pattern) will break in zsh. If you need word splitting in zsh, use `$=VAR`. But the better approach is to always use arrays for multi-value data, which works in both shells.
+
+### Array indexing
+
+- **Bash**: Arrays are **0-indexed**. `${arr[0]}` is the first element.
+- **Zsh**: Arrays are **1-indexed**. `${arr[1]}` is the first element. `${arr[0]}` returns empty.
+
+```bash
+arr=(a b c)
+
+# Bash:
+echo "${arr[0]}"   # "a"
+
+# Zsh:
+echo "${arr[1]}"   # "a"
+echo "${arr[0]}"   # "" (empty!)
+```
+
+Any logic that calculates array offsets will be off-by-one between the two shells.
+
+### Non-existent glob patterns
+
+- **Bash**: If a glob matches nothing, the literal pattern string is passed as an argument (e.g., `*.xyz` stays as `*.xyz`).
+- **Zsh**: If a glob matches nothing, zsh throws a **fatal error**: `no matches found`.
+
+```bash
+# Bash: passes literal "*.nonexistent" to echo
+echo *.nonexistent    # bash: *.nonexistent
+
+# Zsh: aborts the command entirely
+echo *.nonexistent    # zsh: error: no matches found: *.nonexistent
+```
+
+This is particularly dangerous for commands that use glob-like syntax for non-file purposes (e.g., `pip install package[extra]`). In zsh, quote these to prevent glob interpretation: `pip install 'package[extra]'`.
+
+### The shebang line: the universal escape hatch
+
+When writing scripts (as opposed to inline commands), always include a shebang to ensure the correct interpreter:
+
+```bash
+#!/usr/bin/env bash
+```
+
+When zsh encounters a script starting with `#!/bin/bash` or `#!/usr/bin/env bash`, it spawns a bash subprocess, bypassing all zsh-specific behavior. This is the simplest way to guarantee bash semantics for a script file.
+
+This is why the `GIT_SEQUENCE_EDITOR` temp scripts in the git-interactive-rebase skill use `#!/bin/bash` — the outer shell may be zsh, but the inner script runs in bash where `cat > "$1"` works without noclobber issues.
+
+### Summary of behavioral differences
+
+| Behavior | Bash | Zsh |
+|:---|:---|:---|
+| Word splitting on unquoted vars | Automatic | None (use `$=VAR` to force) |
+| Array start index | `0` | `1` |
+| Unmatched glob | Passes literal string | Fatal error: "no matches found" |
+| Empty unquoted variable | Removed from arg list | Removed from arg list |
+| `read -n 1` (single char) | Works | Use `read -k 1` instead |
