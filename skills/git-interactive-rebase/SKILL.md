@@ -584,6 +584,51 @@ git tag -d pre-rebase-state
 
 This avoids the overhead and fragility of copying files to `/tmp`, works with any number of files, and handles binary files correctly since git manages the content.
 
+#### Alternative: rebuild history on a fresh branch
+
+Sometimes it's easier to skip the interactive rebase entirely and build new commits from scratch on a fresh branch. This is especially useful when:
+
+- You need to **build and test at each commit** (a dirty working tree from `git reset --soft` would interfere with building against the old code)
+- You're collapsing many commits into a very different structure
+- The rebase todo would be complex with many drops and edits
+
+The workflow:
+
+```bash
+# 1. Tag the final state of the feature branch
+git tag pre-rebase-state
+
+# 2. Find the fork point — where the branch diverged from the target branch.
+#    Use merge-base, not the target branch directly, because the target may
+#    have advanced since the branch was created.
+FORK_POINT=$(git merge-base <target-branch> <feature-branch>)
+
+# 3. Create a fresh branch from the fork point (clean working tree)
+git checkout -b <new-branch> "$FORK_POINT"
+
+# 4. Build commit 1: e.g., "before" tests only
+#    Write or restore the files you want, then build and test
+git restore --source=pre-rebase-state -- path/to/test_file.ts
+# ... edit the test to reflect "before" behavior if needed ...
+git add path/to/test_file.ts
+# Build and test here — working tree is clean except for the test file
+git commit -m "test: add tests for current behavior"
+
+# 5. Build commit 2: all implementation changes + updated tests
+git restore --source=pre-rebase-state -- .
+git add -A
+# Build and test here — now the full implementation is present
+git commit -m "feat: implement feature with updated tests"
+
+# 6. Point the original branch to the new history
+git branch -f <feature-branch> <new-branch>
+git checkout <feature-branch>
+git branch -d <new-branch>
+git tag -d pre-rebase-state
+```
+
+The key advantage: at each commit, the working tree is clean and buildable. You can run the full test suite to verify each commit in isolation, which is exactly what reviewers expect when they check out individual commits.
+
 ### Handling conflicts
 
 When a rebase encounters conflicts:
