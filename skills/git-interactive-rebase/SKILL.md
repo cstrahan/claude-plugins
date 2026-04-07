@@ -303,17 +303,36 @@ rm -f "$EDITOR_SCRIPT"
 git reset HEAD~1
 ```
 
-**Useful commands during the edit pause:**
+**Retrieving file contents from any commit:**
+
+During a rebase (or any time), you can read or restore files from any commit without copying files to `/tmp`. Since everything is committed, git itself is the backup.
 
 ```bash
-# See what the file looked like before this commit (the parent state)
-git show HEAD:path/to/file.py
+# READ a file from a commit (prints to stdout, doesn't modify working tree)
+git show <sha>:path/to/file.py
 
-# Restore a single file to its pre-commit state (without resetting everything)
-git checkout HEAD -- path/to/file.py
+# RESTORE a file from a commit into the working tree
+git restore --source=<sha> -- path/to/file.py
+
+# RESTORE multiple files or a whole directory
+git restore --source=<sha> -- path/to/dir/
+
+# FIND which files changed between two refs
+git diff --name-only <base>..<head>
+git diff --name-status <base>..<head>   # includes A/M/D status
 ```
 
-`git show HEAD:path` reads the index/commit version of a file without touching the working tree — useful for comparing or extracting the "before" state when crafting intermediate file contents.
+**Important**: `git restore --source=<sha> -- path` will **delete** the file from the working tree if it doesn't exist in that commit. This is silent — no error, no warning.
+
+**Tag before rebasing**: If you need to reference the final state of your branch during a rebase (e.g., to restore files from it), tag it first. Commit hashes change during rebase, but tags are stable:
+
+```bash
+git tag pre-rebase-state
+# ... do the rebase ...
+git restore --source=pre-rebase-state -- path/to/file.py
+# ... when done ...
+git tag -d pre-rebase-state
+```
 
 **Step 3: Stage and commit in pieces** — choose the approach that fits:
 
@@ -525,6 +544,45 @@ git rebase --continue
 Repeat for each conflict. The pattern is always the same: `--theirs`, `add`, `continue`.
 
 **Note**: The formatter command must be available at an absolute path or installed globally — it may not exist in the working tree at earlier commits. Formatting is idempotent, so the amend is safe even if the formatter makes no changes.
+
+### Collapsing and rearranging commits with `git restore`
+
+A common workflow: you have a series of commits and want to collapse them into a different structure — for example, turning 8 implementation commits into a "before tests" commit and an "after implementation + tests" commit.
+
+Instead of copying files to `/tmp` and restoring them manually, use `git restore --source=<ref>` to pull file contents directly from any commit. Tag the final state first so you have a stable reference:
+
+```bash
+# 1. Tag the final state (commit hashes change during rebase, tags don't)
+git tag pre-rebase-state
+
+# 2. Find which files changed across the whole branch
+git diff --name-only <base>..HEAD
+
+# 3. Start the rebase — edit the first commit, drop the rest
+#    (you'll manually create the commits you want)
+```
+
+During the rebase, use `git restore` to assemble each commit's content:
+
+```bash
+# Pull a specific file from an earlier commit
+git restore --source=<earlier-sha> -- path/to/tests.ts
+
+# Pull all files from the tagged final state
+git restore --source=pre-rebase-state -- src/ tests/
+
+# Stage and commit
+git add -A
+git commit -m "commit message"
+```
+
+After the rebase, clean up the tag:
+
+```bash
+git tag -d pre-rebase-state
+```
+
+This avoids the overhead and fragility of copying files to `/tmp`, works with any number of files, and handles binary files correctly since git manages the content.
 
 ### Handling conflicts
 
