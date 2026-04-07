@@ -257,6 +257,18 @@ rm -f "$EDITOR_SCRIPT"
 git reset HEAD~1
 ```
 
+**Useful commands during the edit pause:**
+
+```bash
+# See what the file looked like before this commit (the parent state)
+git show HEAD:path/to/file.py
+
+# Restore a single file to its pre-commit state (without resetting everything)
+git checkout HEAD -- path/to/file.py
+```
+
+`git show HEAD:path` reads the index/commit version of a file without touching the working tree — useful for comparing or extracting the "before" state when crafting intermediate file contents.
+
 **Step 3: Stage and commit in pieces** — choose the approach that fits:
 
 ##### Approach A: Changes are in separate files
