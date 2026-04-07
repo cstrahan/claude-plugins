@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-plugins",
+  "description": "General-purpose skills for Claude Code workflows",
+  "owner": {
+    "name": "Charles Strahan"
+  },
+  "plugins": [
+    {
+      "name": "claude-plugins",
+      "description": "Git workflows and other general-purpose skills for Claude Code",
+      "source": "./",
+      "skills": [
+        "./skills/git-interactive-rebase"
+      ]
+    }
+  ]
+}

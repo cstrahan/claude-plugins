@@ -1,0 +1,5 @@
+{
+  "name": "claude-plugins",
+  "description": "General-purpose skills for Claude Code: git workflows and more.",
+  "version": "1.0.0"
+}
