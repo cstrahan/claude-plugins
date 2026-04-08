@@ -5,6 +5,32 @@ description: Use this skill for git workflows that require careful, programmatic
 
 # Git Workflows
 
+## When to rewrite history
+
+Interactive rebase isn't just for fixing typos in commit messages. It's a tool for crafting a commit history that tells a clear story for reviewers. Here are common scenarios where rewriting history improves reviewability.
+
+### Anchor & Pivot
+
+Before changing code, commit an **Anchor** — tests for the current behavior, including assertions that explicitly demonstrate the *absence* of the change you're about to make. Then commit the **Pivot** — the implementation change plus updated tests that now pass, making the before/after transition perfectly visible in the git diff.
+
+The Anchor makes the reviewer's job easier: they can see the existing behavior codified as tests, then see exactly what changed in the Pivot commit. Without the Anchor, the reviewer has to mentally reconstruct what the old behavior was.
+
+**The retroactive Anchor**: In practice, the Anchor is often informed by the Pivot. Once you have working tests for the new behavior, you can go back and write the "before" tests by logically negating the assertions — asserting the absence of pagination, the old return format, the missing field, etc. It's much easier to write these "absence" tests when you already know what the "presence" looks like. Trying to anticipate the negation before doing the work is often harder than it sounds.
+
+This means the natural development order is often reversed: you implement the feature first (Pivot), then retroactively create the Anchor by rewriting history. The techniques in this skill — particularly "Collapsing and rearranging commits" and "Rebuild history on a fresh branch" — are designed for exactly this workflow:
+
+1. Implement the feature and write tests for the new behavior
+2. Use the working tests as a template to write "before" tests (negate the assertions)
+3. Rewrite history so the Anchor commit (before tests against the old code) comes first, followed by the Pivot commit (implementation + updated tests)
+4. Build and test at each commit to verify both are independently valid
+
+### Other common scenarios
+
+- **Splitting a "too big" commit**: A single commit that adds a feature, refactors surrounding code, and fixes a bug should be split into three commits so each can be reviewed independently.
+- **Absorbing fix-up commits**: During development you often create small "oops" commits that fix issues in earlier work. Before review, absorb these into the commits they fix using `fixup`.
+- **Reordering for logical flow**: Commits may have been authored in exploration order, not presentation order. Reorder so reviewers see foundational changes before the code that depends on them.
+- **Retroactive formatting**: You forgot to run the formatter. Rather than a single "run formatter" commit at the end, apply formatting to each commit so every commit in the history is clean.
+
 ## Programmatic Interactive Rebase
 
 Git's interactive rebase (`git rebase -i`) normally opens an editor for the user to modify a "todo" file. Since Claude Code can't interact with terminal editors, use `GIT_SEQUENCE_EDITOR` to supply the todo list programmatically, and `GIT_EDITOR` when you need to control commit message editing (for `reword` and `squash` actions).
