@@ -11,7 +11,7 @@
       "description": "Git workflows and other general-purpose skills for Claude Code",
       "source": "./",
       "skills": [
-        "./skills/git-interactive-rebase",
+        "./skills/git-rebase-interactive",
         "./skills/shell"
       ]
     }

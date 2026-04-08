@@ -6,7 +6,7 @@ Claude Code skills for general-purpose git workflows and other development tasks
 
 | Skill | Description |
 |-------|-------------|
-| **git-interactive-rebase** | Programmatic interactive git rebase — fixups, squashes, rewords, reordering, commit splitting, conflict resolution, and shell compatibility workarounds (zsh noclobber, etc.) |
+| **git-rebase-interactive** | Programmatic interactive git rebase — fixups, squashes, rewords, reordering, commit splitting, conflict resolution, and shell compatibility workarounds (zsh noclobber, etc.) |
 | **shell** | Shell compatibility — zsh detection, noclobber-safe redirection (`>|`), extended globbing pitfalls, special character quoting, and portable patterns that work across bash and zsh |
 
 ## Installation
@@ -97,12 +97,12 @@ To remove the plugin and marketplace:
 
 ## Usage
 
-Once installed, skills activate automatically based on context. Mention interactive rebase, commit cleanup, fixups, squashing, or reordering and the git-interactive-rebase skill kicks in.
+Once installed, skills activate automatically based on context. Mention interactive rebase, commit cleanup, fixups, squashing, or reordering and the git-rebase-interactive skill kicks in.
 
 You can also invoke a skill explicitly:
 
 ```
-/cstrahan-claude-plugins:git-interactive-rebase
+/cstrahan-claude-plugins:git-rebase-interactive
 ```
 
 ## Adding new skills
@@ -118,7 +118,7 @@ Then add it to `.claude-plugin/marketplace.json` in the `skills` array:
 
 ```json
 "skills": [
-  "./skills/git-interactive-rebase",
+  "./skills/git-rebase-interactive",
   "./skills/new-skill"
 ]
 ```

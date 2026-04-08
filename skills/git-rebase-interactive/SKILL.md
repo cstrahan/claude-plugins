@@ -1,5 +1,5 @@
 ---
-name: git-interactive-rebase
+name: git-rebase-interactive
 description: Use this skill for git workflows that require careful, programmatic execution — interactive rebases, commit history cleanup, fixups, squashes, commit splitting, reordering, and conflict resolution. Activate whenever the user wants to clean up commit history, reorganize commits, or perform interactive rebase operations, even if they don't explicitly say "rebase".
 ---
 
