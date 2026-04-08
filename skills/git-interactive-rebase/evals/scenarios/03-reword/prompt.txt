@@ -1,0 +1,6 @@
+These commit messages are unhelpful. Reword them using interactive rebase:
+- "add stuff" should become "feat: add default configuration"
+- "more stuff" should become "feat: add server module"
+
+Keep the file contents unchanged. After the rebase, the history should have
+exactly 2 commits with the new messages.

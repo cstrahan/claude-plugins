@@ -1,0 +1,14 @@
+The last 3 commits have unformatted Python code (missing spaces around operators and
+after commas). A formatter script exists at tools/format.sh in the repo.
+
+Apply the formatter retroactively so that EVERY commit in the history has properly
+formatted code — not just a single formatting commit at the end.
+
+Use the skill's guidance on retroactive formatting (the --exec approach is recommended).
+The formatter is idempotent: running it on already-formatted code produces no changes.
+
+After the rebase:
+- The same 4 commits should exist (chore: add formatter, feat: add math module,
+  feat: add subtract, feat: add multiply)
+- Running `bash tools/format.sh src/math.py && git diff` at any commit should
+  show no changes (code is already formatted)

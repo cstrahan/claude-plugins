@@ -1,0 +1,8 @@
+The second commit ("fix: handle empty name") is a fix that should have been part of
+the first commit ("feat: add greeting module"). Use an interactive rebase to absorb
+the fix commit into the feature commit using fixup. The README commit should remain
+as a separate commit afterward.
+
+After the rebase, the history should have exactly 2 commits:
+1. "feat: add greeting module" (containing the fix)
+2. "chore: add README"

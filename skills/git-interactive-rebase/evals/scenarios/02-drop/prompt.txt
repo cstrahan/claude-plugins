@@ -1,0 +1,9 @@
+The second commit ("DEBUG: temporary logging") was accidental and should be removed
+entirely from the history. Drop it using an interactive rebase. The other two commits
+should remain unchanged.
+
+After the rebase, the history should have exactly 2 commits:
+1. "feat: add math utils"
+2. "feat: add subtract"
+
+The file src/debug.py should not exist.

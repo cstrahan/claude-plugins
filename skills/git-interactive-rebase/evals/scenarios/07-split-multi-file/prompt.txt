@@ -1,0 +1,9 @@
+The second commit ("feat: add parser and formatter") adds two unrelated files in a
+single commit. Split it into two separate commits:
+1. "feat: add parser" — containing only src/parser.py
+2. "feat: add formatter" — containing only src/formatter.py
+
+After the rebase, the history should have exactly 3 commits:
+1. "init: add README"
+2. "feat: add parser"
+3. "feat: add formatter"

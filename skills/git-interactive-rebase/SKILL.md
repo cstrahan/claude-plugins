@@ -555,8 +555,10 @@ During a rebase, `--theirs` refers to the commit being replayed (the original co
 Instead of manual `edit` stops, use the `--exec` flag to run the formatter after each commit automatically. The `--exec` flag inserts the command after every `pick` in the todo — no `GIT_SEQUENCE_EDITOR` script needed:
 
 ```bash
-git rebase '<base>^' --exec 'npx prettier --write "src/**/*.{ts,tsx}" && git add -A && git commit --amend --no-edit'
+GIT_SEQUENCE_EDITOR="true" git rebase '<base>^' --exec 'npx prettier --write "src/**/*.{ts,tsx}" && git add -A && git commit --amend --no-edit'
 ```
+
+**Note**: `--exec` implies `-i` (interactive mode), which would normally open an editor. Use `GIT_SEQUENCE_EDITOR="true"` to accept the auto-generated todo without editing.
 
 When a conflict occurs, resolve it by just taking `--theirs` — you don't even need to re-run the formatter manually, because the exec command fires after `git rebase --continue` and will format+amend the commit for you:
 

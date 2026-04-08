@@ -1,0 +1,9 @@
+Reorder the commits so that "feat: add order model" comes before "feat: add product model".
+The user model commit should remain first.
+
+After the rebase, the commit order (oldest to newest) should be:
+1. "feat: add user model"
+2. "feat: add order model"
+3. "feat: add product model"
+
+All three files should still exist at HEAD with correct content.

@@ -1,0 +1,8 @@
+Squash the first three "wip" commits into a single commit with the message:
+"feat: add authentication module with token support"
+
+Keep the logging commit separate and unchanged.
+
+After the rebase, the history should have exactly 2 commits:
+1. "feat: add authentication module with token support"
+2. "feat: add logging"

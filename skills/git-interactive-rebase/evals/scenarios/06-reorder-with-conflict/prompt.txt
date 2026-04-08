@@ -1,0 +1,13 @@
+Reorder the commits so that "feat: add format function" comes BEFORE
+"feat: add separator param to parse". This will cause a conflict because the
+format function commit was authored against a version of utils.py that included
+the separator parameter.
+
+Resolve any conflicts that arise. The final file should contain all three
+pieces of functionality: the parse function with separator param, and the
+format_output function.
+
+After the rebase, the commit order (oldest to newest) should be:
+1. "feat: add parse function"
+2. "feat: add format function"
+3. "feat: add separator param to parse"

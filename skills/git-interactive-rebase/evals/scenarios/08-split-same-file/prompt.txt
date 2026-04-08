@@ -1,0 +1,14 @@
+The second commit does two things at once: it renames "add" to "sum" AND adds a new
+"multiply" function. Split it into two commits:
+1. "refactor: rename add to sum" — only the rename, no new function
+2. "feat: add multiply function" — adds the multiply function
+
+The intermediate state after the refactor commit should have a file with just:
+- def sum(a, b): return a + b
+(no multiply function yet)
+
+This requires writing an intermediate file state that never existed in the original
+history. After the rebase, the history should have exactly 3 commits:
+1. "feat: add calculator with add function"
+2. "refactor: rename add to sum"
+3. "feat: add multiply function"

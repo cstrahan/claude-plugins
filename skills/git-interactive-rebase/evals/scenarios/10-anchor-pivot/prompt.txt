@@ -1,0 +1,23 @@
+This branch adds pagination to list_items. The current history has 3 commits:
+1. "feat: add items API" (original, no pagination)
+2. "feat: add pagination to list_items" (implementation change)
+3. "test: add pagination tests" (tests for the NEW behavior)
+
+Restructure the history into an Anchor & Pivot pattern with exactly 2 commits
+after the base commit:
+
+ANCHOR (commit 2): "test: add tests for current list_items behavior"
+- Add tests/test_api.py with tests that assert the OLD behavior (before pagination):
+  - list_items returns a plain list, not a dict
+  - No offset/limit parameters needed
+  - The function signature is list_items(db) with no pagination args
+  These "before" tests should be the logical negation of the "after" tests.
+
+PIVOT (commit 3): "feat: add pagination to list_items with updated tests"
+- Contains the implementation changes to src/api.py (pagination support)
+- Contains the updated tests/test_api.py (testing the new paginated behavior)
+
+The base commit ("feat: add items API") should remain unchanged.
+
+Use the skill's guidance on "Anchor & Pivot" and "rebuild history on a fresh branch"
+or "collapsing and rearranging commits" to accomplish this.
