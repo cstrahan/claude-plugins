@@ -157,10 +157,11 @@ git rebase -i 'abc1234^{commit}'  # Extended ref syntax
 
 **Filenames with parentheses:**
 ```bash
-# WRONG — zsh treats (1) as a glob qualifier
-cp "download (1).pdf" ~/Documents/
+# WRONG — unquoted parentheses trigger glob qualification
+cp download (1).pdf ~/Documents/     # zsh error: no matches found: (1).pdf
 
-# RIGHT — single quotes prevent glob qualification
+# RIGHT — any quoting works (double or single)
+cp "download (1).pdf" ~/Documents/
 cp 'download (1).pdf' ~/Documents/
 ```
 
