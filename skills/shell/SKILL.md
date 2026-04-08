@@ -104,17 +104,28 @@ EOF
 
 Zsh treats several characters as functional operators that bash treats as literal. These cause "no matches found" errors or silent misbehavior when they appear unquoted in arguments.
 
-### Characters that are dangerous in zsh
+### Characters that are dangerous in zsh (and some in bash too)
 
-| Character | Zsh behavior | Example that breaks |
+| Character | Context | Example that breaks |
 |:---|:---|:---|
-| `=` (word-initial) | Filename expansion — `=cmd` becomes `/path/to/cmd` | `echo =true` outputs `/bin/true` |
-| `^` | Extended glob negation, or history substitution at line start | `git rebase -i abc1234^` → "no matches found" |
-| `~` | Extended glob exclusion (also home dir expansion) | `*.c~main.c` means "all .c except main.c" |
-| `#` | Extended glob repetition (with `extended_glob`) | Part of a regex-like pattern matching |
-| `()` | Glob qualifiers | `data(1).txt` → zsh interprets `(1)` as a qualifier |
-| `<>` | Numeric range glob | `file<1-10>` matches `file1` through `file10` |
-| `!` | History expansion (inside double quotes too) | `echo "Hello!"` → "event not found" |
+| `?` | Single-char glob (bash AND zsh) | `echo https://example.com?param=value` → "no matches found" |
+| `=` (word-initial) | Zsh filename expansion — `=cmd` becomes `/path/to/cmd` | `echo =true` outputs `/bin/true` |
+| `^` | Zsh extended glob negation, or history substitution at line start | `git rebase -i abc1234^` → "no matches found" |
+| `~` | Zsh extended glob exclusion (also home dir expansion) | `*.c~main.c` means "all .c except main.c" |
+| `#` | Zsh extended glob repetition (with `extended_glob`) | Part of a regex-like pattern matching |
+| `()` | Zsh glob qualifiers (unquoted only) | `cp download (1).pdf ~/` → error |
+| `<>` | Zsh numeric range glob | `file<1-10>` matches `file1` through `file10` |
+| `!` | History expansion (bash and zsh, inside double quotes too) | `echo "Hello!"` → "event not found" |
+
+The `?` character is a standard glob that matches any single character — it's active in both bash and zsh. It's a common pitfall with URLs containing query strings:
+
+```bash
+# WRONG — ? is a glob character, shell tries to match files
+curl https://example.com/api?page=1&limit=10
+
+# RIGHT — quote the URL
+curl 'https://example.com/api?page=1&limit=10'
+```
 
 ### The golden rule: single-quote strings with special characters
 
