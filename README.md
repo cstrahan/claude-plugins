@@ -7,7 +7,7 @@ Claude Code skills for general-purpose git workflows and other development tasks
 | Skill | Description |
 |-------|-------------|
 | **git-rebase-interactive** | Programmatic interactive git rebase — fixups, squashes, rewords, reordering, commit splitting, conflict resolution, and shell compatibility workarounds (zsh noclobber, etc.) |
-| **shell** | Shell compatibility — zsh detection, noclobber-safe redirection (`>|`), extended globbing pitfalls, special character quoting, and portable patterns that work across bash and zsh |
+| **shell** | Shell compatibility — zsh detection, noclobber-safe redirection, extended globbing pitfalls, special character quoting, and portable patterns that work across bash and zsh |
 
 ## Installation
 
