@@ -52,7 +52,7 @@ All examples in this skill use `>|` instead of `>` for file redirection. This is
 EDITOR_SCRIPT=$(mktemp)
 cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
-cat > "$1" << 'TODO'
+cat > "${1}" << 'TODO'
 pick abc1234 First commit message
 fixup def5678 Commit to absorb into first
 pick ghi9012 Third commit stays separate
@@ -124,7 +124,7 @@ The `exec` action is special — it doesn't take a commit hash, just a shell com
 EDITOR_SCRIPT=$(mktemp)
 cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
-cat > "$1" << 'TODO'
+cat > "${1}" << 'TODO'
 pick abc1234 First commit
 fixup def5678 Second commit (will be absorbed)
 pick ghi9012 Third commit
@@ -185,7 +185,7 @@ The `true` command exits successfully without modifying the file, so git uses th
 MSG_EDITOR=$(mktemp)
 cat >| "$MSG_EDITOR" << 'MSGEDIT'
 #!/bin/bash
-cat > "$1" << 'MSG'
+cat > "${1}" << 'MSG'
 feat: add complete user module
 
 Combines user model, controller, and routes into a single commit.
@@ -205,7 +205,7 @@ Use the `reword` action and supply a `GIT_EDITOR` script with the new message:
 EDITOR_SCRIPT=$(mktemp)
 cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
-cat > "$1" << 'TODO'
+cat > "${1}" << 'TODO'
 reword abc1234 old message here
 pick def5678 keep this one
 TODO
@@ -215,7 +215,7 @@ chmod +x "$EDITOR_SCRIPT"
 MSG_EDITOR=$(mktemp)
 cat >| "$MSG_EDITOR" << 'MSGEDIT'
 #!/bin/bash
-cat > "$1" << 'MSG'
+cat > "${1}" << 'MSG'
 feat: better commit message
 
 More detailed description here.
@@ -308,7 +308,7 @@ Use the `edit` action to pause the rebase at a commit, then reset and recommit i
 EDITOR_SCRIPT=$(mktemp)
 cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
-cat > "$1" << 'TODO'
+cat > "${1}" << 'TODO'
 edit abc1234 commit to split
 pick def5678 next commit
 TODO
@@ -473,11 +473,11 @@ MSGEDIT
 cat >> "$MSG_EDITOR" << 'MSGEDIT'
 
 if [ "$COUNT" -eq 1 ]; then
-  cat > "$1" << 'MSG1'
+  cat > "${1}" << 'MSG1'
 feat: first reworded message
 MSG1
 elif [ "$COUNT" -eq 2 ]; then
-  cat > "$1" << 'MSG2'
+  cat > "${1}" << 'MSG2'
 fix: second reworded message
 MSG2
 fi
@@ -510,7 +510,7 @@ Use `edit` on each commit, run the formatter, amend, and continue. When conflict
 EDITOR_SCRIPT=$(mktemp)
 cat >| "$EDITOR_SCRIPT" << 'SCRIPT'
 #!/bin/bash
-cat > "$1" << 'TODO'
+cat > "${1}" << 'TODO'
 edit abc1234 first commit to format
 edit def5678 second commit to format
 edit ghi9012 third commit to format
@@ -676,7 +676,22 @@ Conflicts are most likely when:
 ### Troubleshooting
 
 **"fatal: could not read file..."**
-The todo file path wasn't passed correctly. Ensure the inner script uses `"$1"`.
+The todo file path wasn't passed correctly. Ensure the inner script uses
+the curly-brace form `"${1}"` (not bare `"$1"`) when redirecting to git's
+todo file. See the note in the next section for why.
+
+**Inner script writes to a file named `up` (or some other random word) instead of git's todo path**
+Caused by Claude Code's `$N` argument substitution
+([docs](https://code.claude.com/docs/en/skills#available-string-substitutions)):
+the bare `$0`, `$1`, `$2`... tokens in skill content get rewritten to
+positional arguments from the skill invocation *before* the content is
+delivered to the model. If the skill was invoked as
+`/git-rebase-interactive clean up the history`, then `$1` is replaced
+with the literal word `up`, and a script with `cat > "$1"` ends up as
+`cat > "up"` — writes to the wrong path, the rebase silently runs the
+original todo, and nothing changes. The curly-brace form `${1}` is not
+matched by the substitution and survives intact, so always use that for
+positional-argument access in skill content.
 
 **Rebase doesn't seem to do anything / todo silently ignored**
 The editor script may have failed to write the todo file. Common cause: zsh `noclobber` preventing `cat >` from overwriting the mktemp file — use `>|` instead. See the **shell** skill for details. Also check that commit hashes match actual commits in the range — use short hashes (7+ chars) from `git log --oneline`.
