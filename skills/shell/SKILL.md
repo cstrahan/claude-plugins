@@ -100,6 +100,96 @@ content
 EOF
 ```
 
+## Here-documents (heredocs)
+
+A heredoc redirects a block of inline text into a command's stdin until a
+delimiter line is reached. The single most important fact: **whether the
+delimiter is quoted determines whether the body is interpreted or
+literal.** Bash and zsh agree on every detail of this behavior — the
+gotchas below are not shell-portability issues, they are language
+behavior any heredoc-using script has to get right.
+
+### The two modes
+
+| Form | Body interpretation |
+|:---|:---|
+| `<<EOF` (delimiter unquoted) | Like a double-quoted string: `$var` expands, `` `cmd` `` and `$(cmd)` substitute, `\` escapes `$`, `` ` ``, `\`, and a trailing newline (line continuation). Any of `<<EOF`, `<<"EOF"` minus the quotes, or `<< EOF` are all "unquoted". |
+| `<<'EOF'`, `<<"EOF"`, `<<\EOF` | Body is **fully literal**. NO expansion. NO command substitution. NO arithmetic. **NO backslash escapes** — `\$`, `` \` ``, `\\` are kept verbatim, not consumed. Even `\<newline>` does NOT join lines. |
+
+Any quoting on the delimiter — single, double, or a leading backslash —
+puts you in literal mode. The choice between `'EOF'`, `"EOF"`, and
+`\EOF` is purely stylistic; they're equivalent.
+
+### The trap: don't escape inside `<<'EOF'`
+
+When the delimiter is quoted, the body is literal. That means
+backslashes are kept as-is — they do **not** quote the next character
+the way they would in a double-quoted string or an unquoted heredoc.
+Adding `\$`, `` \` ``, `\\` to "be safe" lands literal backslashes in
+your output:
+
+```bash
+# WRONG — produces "literal: \$USER" with the backslash
+cat <<'EOF'
+literal: \$USER
+EOF
+
+# RIGHT — single-quoted delimiter already prevents expansion;
+# write the dollar sign as-is:
+cat <<'EOF'
+literal: $USER
+EOF
+```
+
+This is the most common heredoc bug for someone who's used to escaping
+inside double-quoted strings. The rule of thumb: **pick one mode, and
+write the body in that mode's idiom.**
+
+- Need expansion? Use unquoted (`<<EOF`) and escape what you don't want
+  expanded (`\$`, `` \` ``).
+- Need everything literal? Use quoted (`<<'EOF'`) and write everything
+  as-is. **No backslashes for `$`, `` ` ``, `\`.**
+
+### Behavior matrix
+
+Verified identical between bash and zsh:
+
+| Body content | `<<EOF` (unquoted) | `<<'EOF'` / `<<"EOF"` / `<<\EOF` |
+|:---|:---|:---|
+| `$USER` | expands to value of $USER | literal `$USER` |
+| `` `echo hi` `` | expands to `hi` | literal `` `echo hi` `` |
+| `\$USER` | escape consumed → `$USER` (literal dollar) | literal `\$USER` (backslash kept!) |
+| `` \`hi\` `` | escape consumed → `` `hi` `` | literal `` \`hi\` `` |
+| `\\hi` | escape consumed → `\hi` | literal `\\hi` |
+| `text\` then newline | line continuation — joins to next line | NOT joined; trailing `\` kept |
+
+### Tab-stripping form (`<<-EOF`)
+
+The dash variant `<<-` strips leading tabs (not spaces) from each body
+line and from the line containing the delimiter, so heredocs in
+indented code don't have to break the indent. Both shells implement
+this the same way; quoting rules above still apply.
+
+```bash
+if true; then
+	cat <<-'EOF'
+		this line is preceded by a tab
+		so is this one
+	EOF
+fi
+```
+
+### Heredocs into a redirected file
+
+Combine with `>|` (see above) so the heredoc-write doesn't trip
+zsh's `noclobber` when the target file already exists:
+
+```bash
+cat >| "$TMPFILE" <<'EOF'
+literal body — no expansion, no escapes
+EOF
+```
+
 ## Zsh special characters
 
 Zsh treats several characters as functional operators that bash treats as literal. These cause "no matches found" errors or silent misbehavior when they appear unquoted in arguments.
