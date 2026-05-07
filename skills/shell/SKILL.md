@@ -190,6 +190,55 @@ literal body — no expansion, no escapes
 EOF
 ```
 
+### Mixing expansion and literal: build the file in stages
+
+When the same file needs both expanded values (paths to other temp
+files, the user's home dir, a session ID) and large blocks of literal
+text (a script body, a config file, source code), you can avoid
+escaping every `$` and `` ` `` in a single unquoted heredoc by
+building the file in **two or more passes**:
+
+1. First pass: unquoted heredoc + `>|` — writes the parts that need
+   `$VAR` / `$(cmd)` expansion. Bake those values into the output as
+   literals.
+2. Subsequent passes: quoted heredoc + `>>` — append blocks that
+   should be fully literal (no expansion, no backslash-escape
+   bookkeeping).
+
+```bash
+TMPFILE=$(mktemp)
+COUNTER_FILE=$(mktemp)
+
+# Pass 1: expanded.  $COUNTER_FILE is burned in as the literal path.
+cat >| "$TMPFILE" << OUTER
+#!/bin/bash
+COUNTER="$COUNTER_FILE"
+OUTER
+
+# Pass 2: literal.  $COUNTER and $1 stay as bash-runtime references,
+# no escaping needed.
+cat >> "$TMPFILE" << 'OUTER'
+n=$(cat "$COUNTER")
+n=$((n + 1))
+echo "$n" >| "$COUNTER"
+
+case "$n" in
+  1) cp /tmp/msgs/first  "$1" ;;
+  2) cp /tmp/msgs/second "$1" ;;
+esac
+OUTER
+chmod +x "$TMPFILE"
+```
+
+The split makes intent obvious: the first pass shows exactly which
+values are baked in at script-generation time; the second pass is
+plain runtime shell code, written without any heredoc-specific
+backslash bookkeeping. It's much easier to read (and audit) than a
+single unquoted heredoc with `\$` peppered everywhere.
+
+The same recipe scales beyond two passes — alternate `>|` once and
+`>>` for every subsequent block to assemble files of any structure.
+
 ## Zsh special characters
 
 Zsh treats several characters as functional operators that bash treats as literal. These cause "no matches found" errors or silent misbehavior when they appear unquoted in arguments.
