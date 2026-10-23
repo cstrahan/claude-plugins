@@ -317,7 +317,9 @@ chmod +x "$EDITOR_SCRIPT"
 
 GIT_SEQUENCE_EDITOR="$EDITOR_SCRIPT" git rebase -i '<base>^'
 rm -f "$EDITOR_SCRIPT"
-# The rebase is now paused at abc1234
+# The rebase is now paused at abc1234 -- assuming it applied cleanly.
+# If it conflicted instead, HEAD is the commit *before* abc1234 and the
+# steps below do not apply; see "Two kinds of pause".
 ```
 
 **Step 2: Reset to unstage the commit's changes:**
@@ -544,6 +546,13 @@ git add <conflicted-file>
 git rebase --continue
 ```
 
+Note the asymmetry with step 2: there is no `git commit --amend` here, and
+that is deliberate rather than an omission. A conflict stop has no commit to
+amend yet — `--amend` would silently fold this commit into the previous one —
+and the formatter has already run before `--continue` creates it. The `edit`
+stop for this commit is gone, consumed by the conflict. See "Two kinds of
+pause".
+
 Repeat step 3 for each subsequent conflict. With formatting changes, conflicts are predictable — they'll occur on files that the current commit modifies if you formatted those same files in a previous commit.
 
 #### Why `--theirs` is safe here
@@ -657,11 +666,104 @@ git tag -d pre-rebase-state
 
 The key advantage: at each commit, the working tree is clean and buildable. You can run the full test suite to verify each commit in isolation, which is exactly what reviewers expect when they check out individual commits.
 
+### Two kinds of pause — check which one before you `git commit --amend`
+
+An interactive rebase stops for two different reasons, and they need opposite
+commands. Telling them apart matters because `git commit --amend` at the wrong
+one **succeeds silently and destroys a commit**.
+
+|                            | **edit stop** (commit applied)                      | **conflict stop** (commit not applied)                        |
+| -------------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
+| What happened              | git applied the commit, then honoured your `edit`    | git could not apply the commit                                  |
+| `HEAD` is                  | the commit you want to amend                         | the **previous** commit                                         |
+| `.git/rebase-merge/amend`  | exists                                               | absent                                                          |
+| `git status` says          | "You are currently editing a commit while rebasing"  | "You are currently rebasing branch …" + "fix conflicts and then run" |
+| Correct command            | `git commit --amend`                                 | resolve → `git add` → `git rebase --continue`                   |
+
+Check it programmatically rather than inferring it from which command you last
+ran — after a few stops that inference is exactly what goes wrong:
+
+```bash
+if [ -f "$(git rev-parse --git-path rebase-merge/amend)" ]; then
+  echo "edit stop: HEAD is the commit to amend"
+else
+  echo "conflict stop: HEAD is the PREVIOUS commit — do not --amend"
+fi
+```
+
+`git log -1 --oneline` is the cheap sanity check: if it does not name the
+commit you think you are amending, you are at a conflict stop.
+
+#### Why `--amend` at a conflict stop is destructive
+
+At a conflict stop the in-flight commit does not exist yet — its content is
+sitting in the index. `git commit --amend` therefore rewrites the *previous*
+commit with that content, squashing the commit being replayed into its
+predecessor and keeping the predecessor's message. It exits 0. Nothing warns
+you. You find out later, when `git log` is a commit short:
+
+```text
+# Intended                    # What --amend at a conflict stop produces
+A (amended)                   A+B   (message: "A")
+B (amended)                   C
+C (amended)
+```
+
+Do this at each of three stops and all three commits collapse into one.
+
+#### An `edit` that conflicts gives you ONE stop, not two
+
+When a commit marked `edit` fails to apply, the conflict stop *replaces* its
+edit stop. `git rebase --continue` commits the resolution and moves straight to
+the next todo entry — it does **not** stop again for the `edit`.
+
+So make your intended changes at the conflict stop, alongside the resolution:
+
+```bash
+# 1. Resolve the conflict markers
+# 2. Make the changes you set the `edit` for — this is your only chance
+# 3. Stage everything: --continue commits the index and leaves unstaged
+#    changes behind in the working tree
+git add -A
+git rebase --continue
+```
+
+If you have already continued past it, that commit is final — start a second
+rebase with `edit` on the now-rewritten commit.
+
+#### Verify the commit count when the rebase finishes
+
+```bash
+git log --oneline '<base>..HEAD' | wc -l   # must equal your pick/edit/reword lines
+```
+
+A short count means commits were folded together. This is recoverable without
+redoing the work: each `commit (amend)` entry in `git reflog` is a tree that
+was already built and (if you tested as you went) already verified, so you can
+rebuild the history from those trees with `git commit-tree`:
+
+```bash
+git reflog                       # find the sha after each amend step
+C1=<sha of the first correct commit>
+C2=$(GIT_AUTHOR_NAME="..." GIT_AUTHOR_EMAIL="..." GIT_AUTHOR_DATE="..." \
+     git commit-tree '<sha2>^{tree}' -p "$C1" -F msg2.txt)
+C3=$(GIT_AUTHOR_NAME="..." GIT_AUTHOR_EMAIL="..." GIT_AUTHOR_DATE="..." \
+     git commit-tree '<sha3>^{tree}' -p "$C2" -F msg3.txt)
+git reset --hard "$C3"
+git diff '<collapsed-sha>' HEAD   # must be empty: same end state, split correctly
+```
+
+Pass `GIT_AUTHOR_*` from the original commits (`git log --format='%an|%ae|%ad'`)
+or the rebuilt commits get today's date and the committer's identity.
+
 ### Handling conflicts
 
 When a rebase encounters conflicts:
 
-1. **The rebase pauses** with a message indicating which files conflict
+1. **The rebase pauses** with a message indicating which files conflict —
+   note this is a *conflict stop*, so `HEAD` is the previous commit and
+   `git commit --amend` is the wrong tool here even if the todo said `edit`.
+   See "Two kinds of pause" above.
 2. **Check conflict status**: `git status` shows conflicted files (marked `UU`)
 3. **Resolve conflicts** in the affected files — look for `<<<<<<<`, `=======`, `>>>>>>>` markers (with diff3 enabled, there's also a `|||||||` section showing the common ancestor)
 4. **Stage resolved files**: `git add <files>`
@@ -698,6 +800,14 @@ The editor script may have failed to write the todo file. Common cause: zsh `noc
 
 **"zsh: no matches found: abc^"**
 Quote the caret: `'abc1234^'` or escape it: `abc1234\^`
+
+**The rebase finished with fewer commits than the todo listed / a commit "vanished"**
+Almost always `git commit --amend` run at a conflict stop, where `HEAD` is the
+previous commit rather than the one being replayed — so the replayed commit
+gets folded into its predecessor, under the predecessor's message. It exits 0
+and prints nothing unusual, so it is only visible in `git log` afterwards.
+Check with `git log --oneline '<base>..HEAD' | wc -l`; recover with
+`git commit-tree` over the trees in `git reflog`. See "Two kinds of pause".
 
 **"error: could not apply..."**
 A conflict occurred. Use `git status` to see conflicted files, resolve them, `git add`, then `git rebase --continue`.
