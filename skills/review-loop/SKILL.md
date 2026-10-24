@@ -1,0 +1,238 @@
+---
+name: review-loop
+description: Use this skill when running iterative code review to a fixed point — repeatedly spawning fresh reviewer subagents, acting on their findings, and re-reviewing until nothing new turns up. Also covers the mechanics of waiting on long-running background agents without burning the session on useless polling. Activate whenever the user asks for review rounds, an unbiased or independent review, review "until it converges" or "until a fixed point", or when you are about to wait on a background agent.
+---
+
+# Iterative Review to a Fixed Point
+
+A review loop is: spawn a **fresh** reviewer with no memory of previous rounds →
+act on what it finds → spawn another fresh reviewer → stop when a round
+surfaces nothing you haven't already considered.
+
+It works because self-review goes blind. Having just written or defended a
+piece of code, you are the worst available reviewer of it. A reviewer that has
+never seen your reasoning will question things you stopped questioning rounds
+ago. That blindness compounds across iterations: code that several agents have
+already "refined" accumulates confident, wrong comments and fixes that
+introduced their own bugs.
+
+## The waiting trap — read this before spawning anything
+
+The single most expensive failure in this workflow is not a bad review. It is
+**polling a dead agent**.
+
+A background agent can wedge — hit a context limit, die on an API error, stall
+— while the orchestrator's bookkeeping still reports it as `running`. If your
+idea of "check on it" is to call the agent-listing tool again, you will see
+`running` forever and conclude, every single time, that you should wait a bit
+more. Dozens of turns can disappear this way with zero work done.
+
+**`running` in a status listing is not evidence of progress.** It is a flag
+someone set when the agent started and nobody cleared. Progress is evidence of
+progress.
+
+### Check liveness, not status
+
+Agents write a transcript file as they work. Its growth is ground truth:
+
+```bash
+F=<agent output/transcript path>
+echo "size now:   $(wc -c < "$F")"   # NOT stat -- see below
+sleep 20
+echo "size after: $(wc -c < "$F")"
+```
+
+- Size grew → it is alive. Wait.
+- Size completely static across two checks several minutes apart → **it is
+  probably wedged.** Kill it and change approach.
+
+**Measure with `wc -c`, not `stat`, and do not trust mtime at all.** Two
+independent traps, both of which will tell you a healthy agent is dead:
+
+- The path you are given may be a **symlink** to the real transcript. `stat`
+  then reports the *symlink's* own size (a constant — the length of the target
+  path) and the symlink's creation time, which never changes however much the
+  agent writes. `wc -c` follows the link; `stat` does not.
+- Even on a real file, a buffered writer can leave mtime looking many minutes
+  stale while the contents grow steadily.
+
+So: `wc -c`, twice, and compare. If the two numbers differ, it is alive —
+full stop. Treat any size that looks suspiciously round, tiny, or identical
+across very different agents as a sign you are measuring the wrong thing
+rather than as evidence about the agent.
+
+Do NOT read that transcript's *contents* — it is the agent's full JSONL log
+and will blow out your context. Size only.
+
+### Rules for the wait itself
+
+- **Never write a bare poll loop.** `sleep N` + re-check-status + "still
+  running, holding" repeated is a tight loop with the model in it. It produces
+  nothing and costs a turn every iteration.
+- **Prefer being woken.** Background agents notify on completion. Idling by
+  hand is almost always unnecessary — the notification is coming.
+- **If you must wait, wait on a condition, not a clock.** Block on the thing
+  itself (`while kill -0 $PID 2>/dev/null; do sleep 5; done`) rather than
+  sleeping a fixed interval and re-asking.
+- **Set a liveness budget up front.** Decide before spawning: "if the
+  transcript hasn't grown in 5 minutes, it's dead." Then honour it. Without a
+  budget there is no moment at which you decide to stop waiting.
+- **If you catch yourself emitting the same status line twice, stop.** That is
+  the signal. Go check liveness.
+
+### When it IS wedged
+
+Kill it (`TaskStop` / equivalent) and **change the shape of the work** — do not
+respawn the identical task and hope. The usual cause is scope: one agent asked
+to review 2500 lines plus surrounding code has to hold too much at once.
+
+## Scope agents so one stall can't block the round
+
+Split a large review into several agents with **disjoint, explicitly listed
+file sets**, run in parallel:
+
+- A stall costs you one slice, not the round.
+- Each holds less context, so stalls get rarer.
+- Disjoint scopes mean no duplicated work and no merge conflicts in findings.
+
+Split along natural seams — one agent per subsystem, plus a dedicated
+tests-and-docs-and-claims agent (see below). Give each the *function names* it
+owns, not just filenames, and tell it to read those functions in full in the
+working tree rather than only the diff hunks: the worst bugs live in the
+interaction between changed code and untouched callers.
+
+While they run, review something **they are not covering**. There is almost
+always a file left out of every slice. That is free parallelism and it is where
+you will find the bugs nobody was assigned.
+
+## Write down what you already considered — before the round lands
+
+Keep a running `known.md`: fixes already made, and things considered and
+deliberately rejected *with the reason*. Write it **before** the review returns,
+so "I already knew that" can't be constructed after the fact.
+
+Without it you cannot tell a genuinely new finding from a restatement, and the
+loop has no stopping condition. With it, the fixed point is well-defined:
+
+> **Stop when a fresh round surfaces nothing that isn't already in `known.md`.**
+
+A finding that merely restates a rejected item is not new — but *do* re-read
+your stated reason. If the reviewer's argument is better than your rejection,
+the item was never actually settled.
+
+## What to tell each reviewer
+
+- **Don't leak your conclusions.** No "I already fixed X" and no list of known
+  issues. That is the whole point of a fresh reviewer; priming it destroys the
+  independence you are paying for.
+- **Demand a concrete failure scenario** per finding — inputs/state → wrong
+  output. This is the cheapest filter against plausible-sounding fiction.
+- **Require a confidence label** (confirmed / unconfirmed) and say explicitly
+  that finding nothing is an acceptable result. Otherwise you get padding.
+- **Make it read, not pattern-match.** "Verify by tracing the real code path;
+  do not report something because it resembles a common bug class."
+- **Point it at claims, not just code.** Comments, docstrings, commit messages
+  and docs make confident assertions about library internals and about what the
+  code does. On multi-iteration work these rot first — an earlier round's
+  comment describes an earlier round's design. A confidently-worded claim that
+  is now false is a real finding.
+- **Say READ-ONLY** and mean it: no edits, no commits. If it wants to test a
+  hypothesis by breaking something, tell it to copy to a scratch dir.
+- **Give it the test command**, including whatever flags the suite needs to not
+  silently skip (salt, for instance, skips everything without `--core-tests`),
+  and name the known-failing tests so it doesn't rediscover them as findings.
+
+## Ask for mutation testing — it is the difference between "tests pass" and "tests test"
+
+The single highest-value instruction you can give a reviewer looking at tests:
+**break the code on purpose and check whether the suite notices.** Have it copy
+the repo to a scratch dir, invert a condition or delete a line, and re-run.
+
+A suite that stays green after the feature is disabled is not covering the
+feature. This finds things that reading tests never will, and it comes back as
+evidence rather than opinion — "hardcoding this to `True` leaves all 149 tests
+passing" is not a matter of taste. In one round this turned up a flag whose
+removal killed the feature outright with a fully green suite, and three
+separate "tested" behaviours whose tests were satisfied by something other
+than the behaviour in their name.
+
+Then turn it on yourself. **Before believing a test you just wrote, mutate the
+fix it covers and confirm the test fails.** Writing the test after the fix
+means you never saw it fail, and a test that cannot fail is worse than none —
+it reports coverage you do not have. Expect roughly one in four of your own
+new tests to survive the mutation and need strengthening.
+
+Watch especially for tests of environment- or time-dependent bugs. A test for
+"this breaks in the first five minutes of host uptime" passes trivially on a
+host that has been up for days; it has to pin the clock to mean anything. If a
+test would pass on the broken code *in your environment*, it is not a test.
+
+## Triaging what comes back
+
+Sort each finding into: **real and new** → fix; **real but already considered**
+→ check the reviewer's reasoning against your recorded one, then move on;
+**wrong** → say why, in a sentence, and move on.
+
+Do not treat a subagent's report as authoritative. Reviewers hallucinate
+mechanisms and misread control flow with total confidence. Verify before you
+act — especially for anything you are about to describe in a commit message as
+a fix.
+
+**Verify the proposed remedy separately from the finding.** A reviewer can be
+exactly right that something is broken and still hand you a fix that is wrong,
+and the correct diagnosis makes the bad remedy persuasive. One round produced a
+genuine "this read can silently return a partial answer" finding alongside a
+one-line fix that would have permanently disabled the feature on any cluster
+that grew a member, because the list it counted may contain duplicates and the
+caller's own identity. Treat the finding and the fix as two claims needing two
+verifications.
+
+**Look for the reformulation before fixing findings one at a time.** Several
+findings often share a root, and patching each one separately buys guards that
+interact badly. Three separate findings here — a clock-skew hang, a record that
+ages into a wrong answer, and a misleading freshness rule — all dissolved by
+comparing two timestamps written by the *same* clock instead of against the
+reader's. One change, better than the three guards it replaced. Ask "what
+single wrong assumption produces all of these?" before reaching for the first
+fix.
+
+**Treat independent confirmation as a priority signal.** When agents with
+disjoint scopes reach the same defect by different routes — one tracing control
+flow, one measuring behaviour, one checking a docstring's claim against the
+code — that is as close to certainty as this process gets. Fix those first.
+
+Expect to find bugs **in your own previous round's fixes**. That is normal and
+is most of the loop's value. When you do, fix them in the commit that
+introduced them rather than stacking a follow-up, so each commit still stands
+on its own (see the `git-rebase-interactive` skill — and note that amending
+mid-rebase has its own silent trap).
+
+**Do the history rewrite once, after the loop converges — not every round.**
+Keep fixes accumulating in the working tree while the loop runs, and record
+as you go which commit each one belongs to. Splitting after every round means
+repeating a delicate rebase on a tree the next round is about to change
+again: the same risk paid several times for a tidiness nobody sees until the
+end. The requirement is that the *final* history is clean, not that it is
+clean at every intermediate step. This also keeps each round's reviewers
+looking at one coherent working tree rather than a half-restructured one.
+
+Two caveats. Reviewers reading commit messages need something to read, so
+hold message corrections in your notes and apply them with the split. And
+keep the mapping written down the moment you make each fix — reconstructing
+"which commit introduced this?" for thirty changes at the end is far harder
+than noting it once.
+
+## Terminating
+
+The loop ends when a fresh round produces only already-considered items. Say so
+explicitly, and report what you deliberately did not fix and why — a
+deliberately-accepted issue is a result, not an omission.
+
+Guard against two failure modes at the end:
+
+- **False convergence** — rounds come back empty because the prompts got narrow
+  or the reviewers got primed, not because the code is clean. If a round finds
+  nothing, confirm the reviewer actually covered the scope before you call it
+  converged.
+- **Endless polish** — late rounds returning only style preferences means you
+  hit the fixed point a round ago. Stop.
