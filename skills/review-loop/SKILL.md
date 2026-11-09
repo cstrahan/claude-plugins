@@ -286,3 +286,21 @@ The trigger for checking was a mismatch between the file count and memory:
 files you have touched and reconcile it against what git claims. A reviewer
 agent reporting "I restored everything to my backups" is also worth checking
 — its baseline predates your edits.
+
+## Never format a whole tree
+
+Running a formatter over a directory (`black salt/`) rather than over the
+files you edited can silently damage unrelated code. In one case it
+reformatted `#%%OPTS` to `# %%OPTS` — a *substitution sentinel* matched
+literally elsewhere (`SSH_PY_SHIM.replace("#%%OPTS", arg_str)`), which would
+have broken an entire subsystem with no test covering it.
+
+Before finishing, audit scope:
+
+```bash
+git -c core.fsmonitor=false diff --name-only <base> | sort
+```
+
+and diff that against the files the work is *supposed* to touch. Anything
+unexpected is either a formatter artifact or a reviewer's unrestored
+mutation. Both are real.
