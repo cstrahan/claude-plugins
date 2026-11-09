@@ -304,3 +304,11 @@ git -c core.fsmonitor=false diff --name-only <base> | sort
 and diff that against the files the work is *supposed* to touch. Anything
 unexpected is either a formatter artifact or a reviewer's unrestored
 mutation. Both are real.
+
+## Don't run tests over a scope a reviewer is still mutating
+
+A full-suite run reported two failures; a rerun reported two *different*
+ones. An in-flight reviewer was mutating that file to verify coverage.
+Results over that scope are meaningless until it finishes — and reporting
+them as regressions is worse than not running them. Partition test runs by
+reviewer scope, and only run a scope whose reviewer has reported.
