@@ -229,11 +229,22 @@ end. The requirement is that the *final* history is clean, not that it is
 clean at every intermediate step. This also keeps each round's reviewers
 looking at one coherent working tree rather than a half-restructured one.
 
-Two caveats. Reviewers reading commit messages need something to read, so
-hold message corrections in your notes and apply them with the split. And
-keep the mapping written down the moment you make each fix — reconstructing
+Three caveats. Reviewers reading commit messages need something to read, so
+hold message corrections in your notes and apply them with the split. Keep
+the mapping written down the moment you make each fix — reconstructing
 "which commit introduced this?" for thirty changes at the end is far harder
 than noting it once.
+
+And **reconcile the changed-file list before you rewrite anything.** Git
+decides a file is unmodified from cached stat info, and will skip comparing
+contents when that info still matches — so a file you really did change can
+be missing from `git status` and `git diff` entirely. Agents copying the
+tree, or your own stash/checkout round trips, can leave it in that state.
+In one loop this hid six modified files, including a change to an abstract
+base class without which the suite would not have passed; it surfaced only
+because the file *count* disagreed with memory. Before the split: `touch`
+the tree, `git update-index --really-refresh`, then check the list against
+what you believe you touched. A count you cannot explain is the signal.
 
 ## Terminating
 
@@ -249,3 +260,29 @@ Guard against two failure modes at the end:
   converged.
 - **Endless polish** — late rounds returning only style preferences means you
   hit the fixed point a round ago. Stop.
+
+## Verify the tree with blob hashes, not `git status`
+
+`git status` can lie, and the usual fix is not always enough. In a **linked
+worktree** with `core.fsmonitor=true`, plain `git status` under-reported 15
+of 28 modified files, and `git diff --quiet HEAD -- <file>` claimed a file
+was identical to HEAD while the blob hashes differed. `git update-index
+--really-refresh` did **not** clear it — fsmonitor short-circuits the
+refresh.
+
+Reliable forms:
+
+```bash
+git -c core.fsmonitor=false status --short     # bypass the daemon
+git rev-parse HEAD:<path>                      # ground truth
+git hash-object <path>                         # ground truth
+```
+
+Use the bypass flag on **every** git command during a commit split, or files
+will be silently omitted from commits.
+
+The trigger for checking was a mismatch between the file count and memory:
+"I edited crypt.py, why isn't it listed?" Keep a running expectation of which
+files you have touched and reconcile it against what git claims. A reviewer
+agent reporting "I restored everything to my backups" is also worth checking
+— its baseline predates your edits.
