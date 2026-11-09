@@ -196,6 +196,19 @@ reader's. One change, better than the three guards it replaced. Ask "what
 single wrong assumption produces all of these?" before reaching for the first
 fix.
 
+**When reviewers contradict each other about a library's behaviour, read
+the library.** Two agents asserting opposite things about the same function
+are not two opinions to weigh — neither assertion is evidence, and picking
+the more confident one is a coin flip. Black-box testing often cannot
+settle it either: the path may not be reachable from a normal client.
+Fetching the dependency's source at the exact installed version and reading
+the function takes a few minutes and ends the argument. In one loop this
+overturned the *majority* view — two rounds had "verified" a claim the third
+called false, and the source showed the two were right, with an upstream
+`TODO` sitting on the very line in question. The same read also explained a
+behaviour I had measured but not understood. Pin the version, quote the
+code in the comment, and the claim stops being re-litigated every round.
+
 **Treat independent confirmation as a priority signal.** When agents with
 disjoint scopes reach the same defect by different routes — one tracing control
 flow, one measuring behaviour, one checking a docstring's claim against the
