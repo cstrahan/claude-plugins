@@ -273,6 +273,16 @@ because the file *count* disagreed with memory. Before the split: `touch`
 the tree, `git update-index --really-refresh`, then check the list against
 what you believe you touched. A count you cannot explain is the signal.
 
+The same check catches a different failure with the same symptom: a file
+that dropped off the list because an **agent reverted your work**. In one
+round a mutation-testing agent restored a file from a backup it had taken
+before my fixes existed, so two of them vanished and the file's blob hash
+matched `HEAD` exactly — git was telling the truth, the content really was
+unmodified. Only "I edited that file twenty minutes ago, why is it not
+listed?" caught it. Then verify each fix is actually present by grepping for
+it, not by remembering that you applied it. (Working from a `wip` commit
+makes this far less likely in the first place — see above.)
+
 ## Terminating
 
 The loop ends when a fresh round produces only already-considered items. Say so
