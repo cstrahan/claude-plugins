@@ -221,13 +221,40 @@ on its own (see the `git-rebase-interactive` skill — and note that amending
 mid-rebase has its own silent trap).
 
 **Do the history rewrite once, after the loop converges — not every round.**
-Keep fixes accumulating in the working tree while the loop runs, and record
-as you go which commit each one belongs to. Splitting after every round means
-repeating a delicate rebase on a tree the next round is about to change
-again: the same risk paid several times for a tidiness nobody sees until the
-end. The requirement is that the *final* history is clean, not that it is
-clean at every intermediate step. This also keeps each round's reviewers
-looking at one coherent working tree rather than a half-restructured one.
+Keep fixes accumulating while the loop runs and record as you go which commit
+each one belongs to. Splitting after every round means repeating a delicate
+rebase on a tree the next round is about to change again: the same risk paid
+several times for a tidiness nobody sees until the end. The requirement is
+that the *final* history is clean, not that it is clean at every intermediate
+step. This also keeps each round's reviewers looking at one coherent tree
+rather than a half-restructured one.
+
+**Accumulate them in a `wip` commit, not in a dirty working tree.** The two
+are equivalent for everything the loop needs — putative changes, a deferred
+message, an undecided amend target — but uncommitted work is the only form
+that can be *irrecoverably destroyed*, and this workflow points several
+agents at one checkout. A stray `git checkout -- <file>`, `git stash`, or
+`git clean` from a reviewer tidying up after itself silently reverts work
+that exists nowhere else. Commit it as `wip` and that stops being possible:
+the content is in the object store and reachable from the reflog, so the
+worst case is a `git reset`, not a retype.
+
+Three things get easier at the same time:
+
+- **Reviewers get a stable diff.** `git diff origin/master..HEAD` includes
+  the fixes, so you no longer have to warn every agent that the real change
+  set is `git diff origin/master` and that `..HEAD` is a lie.
+- **Restore becomes safe again.** A mutation-testing agent can put a file
+  back with `git checkout -- <file>` — the normal, obvious thing — instead of
+  needing a byte-exact snapshot and a hash manifest, and instead of needing a
+  rule it might forget.
+- **The diff stays legible.** `git diff` shows only what you are editing
+  right now, not the accumulated work of five rounds.
+
+Amend the `wip` commit as the rounds go (`git commit --amend --no-edit`), or
+stack `wip 2`, `wip 3` if you want per-round boundaries to look back at. At
+the end it is absorbed into the real commits by the same rewrite you were
+going to do anyway, so it costs nothing.
 
 Three caveats. Reviewers reading commit messages need something to read, so
 hold message corrections in your notes and apply them with the split. Keep
