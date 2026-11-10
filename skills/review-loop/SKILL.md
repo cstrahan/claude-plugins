@@ -332,6 +332,42 @@ and diff that against the files the work is *supposed* to touch. Anything
 unexpected is either a formatter artifact or a reviewer's unrestored
 mutation. Both are real.
 
+## Don't edit the tree while reviewers are running in it
+
+The mirror of the rule below, and the more expensive one. Reviewers build and
+run in the same checkout you are editing, so a round you start and then
+immediately begin fixing produces three distinct failures:
+
+- **Your test runs race their builds.** A reviewer relinking the binary while
+  your suite spawns it yields errors that look like real defects and are not —
+  `spawn ... EACCES` on a binary that is simply mid-write.
+- **Their results describe a tree that no longer exists.** Mutation findings
+  against code you have since rewritten are not merely stale, they are
+  misleading, because the mutation table still reads as evidence.
+- **Stopping one mid-flight can leave a mutation behind.** An agent killed
+  between "apply mutation" and "restore" leaves the mutation in your tree. In
+  one round that was `return true;` substituted into the predicate that gated
+  the entire feature under review — it would have been committed had the
+  changed-file list not been grepped for the marker.
+
+So: finish editing, *then* launch the round, and treat the tree as read-only
+until every agent reports. If a fix genuinely cannot wait, stop the agents
+first and relaunch them afterwards; a round you have invalidated is cheaper to
+rerun than to interpret.
+
+When agents do mutate, require of them:
+
+- **Absolute paths in every script.** A relative `cd test/cts` followed by
+  `cd ..` lands in the wrong directory, and the restore silently fails while
+  the script reports success.
+- **A distinctive marker in every mutation**, grepped for after each restore
+  and once at the end. `grep -rn MUTMARK` is the cheapest insurance in this
+  whole workflow.
+- **No `pkill -f "<pattern>"`.** It matches the invoking shell's own command
+  line and kills the session running it, usually leaving no output to explain
+  the disappearance. Resolve PIDs first (`pgrep -f "[c]r_proxy ..."`), then
+  kill by PID.
+
 ## Don't run tests over a scope a reviewer is still mutating
 
 A full-suite run reported two failures; a rerun reported two *different*
